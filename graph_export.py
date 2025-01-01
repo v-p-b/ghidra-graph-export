@@ -10,6 +10,7 @@ import os
 from ghidra.program.model.block import BasicBlockModel
 from ghidra.util.task import ConsoleTaskMonitor
 
+
 def collect_nodes(elist):
     ret = set()
     for f, t in elist:
@@ -29,6 +30,7 @@ def block_instructions_count(block):
             ret += 1
     return ret
 
+
 def get_color(source, target):
     if source.getNumDestinations(monitor) < 2:
         return "regular"
@@ -38,13 +40,15 @@ def get_color(source, target):
     # TODO do some sanity checks, the CodeBlock abstraction is weird...
     return "consequence"
 
+
 def get_color_dot(source, target):
-    color=get_color(source, target)
+    color = get_color(source, target)
     if color == "regular":
         return "blue"
     elif color == "alternative":
         return "red"
     return "green"
+
 
 def export_dot(name, elist, path):
     out_name = "%s.dot" % (name)
@@ -56,7 +60,10 @@ def export_dot(name, elist, path):
         for e in elist:
             f = e[0].getFirstStartAddress()
             t = e[1].getFirstStartAddress()
-            out.write('  %s -> %s [color="%s"];\n' % (address2name(f), address2name(t), get_color_dot(e[0], e[1])))
+            out.write(
+                '  %s -> %s [color="%s"];\n'
+                % (address2name(f), address2name(t), get_color_dot(e[0], e[1]))
+            )
         out.write("}\n")
     print("Exported %s" % (out_path))
 
@@ -83,7 +90,7 @@ def export_json(name, elist, path):
         edge_data["source"] = address2name(s.getFirstStartAddress())
         edge_data["target"] = address2name(t.getFirstStartAddress())
         edge_data["attributes"] = {}
-        edge_data["attributes"]["type"] = get_color(s,t)  
+        edge_data["attributes"]["type"] = get_color(s, t)
         data["edges"].append(edge_data)
 
     with open(out_path, "w") as out:
