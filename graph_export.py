@@ -92,9 +92,6 @@ def export_json(name, elist):
 
     return json.dumps(data)
 
-
-edge_list = []
-
 blockModel = BasicBlockModel(currentProgram)
 monitor = ConsoleTaskMonitor()
 
@@ -113,6 +110,7 @@ while func is not None:
         continue
 
     funcName = func.getName()
+    edge_list = []
 
     print("[*] Parsing %s" % (funcName))
     # based on code by cetfor: https://github.com/NationalSecurityAgency/ghidra/issues/855#issuecomment-569355675
@@ -129,7 +127,7 @@ while func is not None:
     dot_export = export_dot(funcName, edge_list)
     json_export = export_json(funcName, edge_list)
 
-    # all_json.append(json.loads(json_export)) # TODO Wasteful, need refactoring
+    all_json.append(json.loads(json_export)) # TODO Wasteful, need refactoring
 
     dot_path = os.path.join(binDir, "%s.dot" % funcName)
     with open(dot_path, "w") as out:
@@ -152,8 +150,6 @@ with open(meta_json_path, "w") as out:
     out.write(json.dumps(meta_json))
 print("[*] Metadata JSON written: %s" % (meta_json_path))
 
-"""
-# Not very efficient...
 full_json_path=os.path.join(binDir, "full.json")
 with open(full_json_path, "w") as out:
     full_json={}
@@ -163,4 +159,3 @@ with open(full_json_path, "w") as out:
     full_json["functions_graphology"]=all_json
     out.write(json.dumps(full_json))
 print("Full JSON written: %s" % (full_json_path))
-"""
