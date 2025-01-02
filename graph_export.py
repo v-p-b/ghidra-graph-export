@@ -1,7 +1,6 @@
 # Export Function Graph to .dot files
 # @runtime Jython
 
-# based on code by cetfor: https://github.com/NationalSecurityAgency/ghidra/issues/855#issuecomment-569355675
 
 import json
 import tempfile
@@ -35,6 +34,8 @@ def get_color(source, target):
     if source.getNumDestinations(monitor) < 2:
         return "regular"
     i = getInstructionContaining(source.getMaxAddress())
+    if i.getFallThrough() is None:  # Unconditional branch as last decoded instruction
+        return "regular"
     if i.getFallThrough().equals(target.getFirstStartAddress()):
         return "alternative"
     # TODO do some sanity checks, the CodeBlock abstraction is weird...
@@ -50,27 +51,23 @@ def get_color_dot(source, target):
     return "green"
 
 
-def export_dot(name, elist, path):
-    out_name = "%s.dot" % (name)
-    out_path = os.path.join(path, out_name)
-    with open(out_path, "w") as out:
-        out.write("digraph %s {\n" % (name))
-        out.write('  node [shape="box"];\n')
-        out.write("  graph [splines=ortho];\n")
-        for e in elist:
-            f = e[0].getFirstStartAddress()
-            t = e[1].getFirstStartAddress()
-            out.write(
-                '  %s -> %s [color="%s"];\n'
-                % (address2name(f), address2name(t), get_color_dot(e[0], e[1]))
-            )
-        out.write("}\n")
-    print("Exported %s" % (out_path))
+def export_dot(name, elist):
+    out = []
+    out.append("digraph %s {" % (name))
+    out.append('  node [shape="box"];')
+    out.append("  graph [splines=ortho];")
+    for e in elist:
+        f = e[0].getFirstStartAddress()
+        t = e[1].getFirstStartAddress()
+        out.append(
+            '  %s -> %s [color="%s"];'
+            % (address2name(f), address2name(t), get_color_dot(e[0], e[1]))
+        )
+    out.append("}")
+    return "\n".join(out)
 
 
-def export_json(name, elist, path):
-    out_name = "%s.json" % (name)
-    out_path = os.path.join(path, out_name)
+def export_json(name, elist):
     data = {}
     data["options"] = {"type": "directed", "multi": True, "allowSelfLoops": True}
     data["attributes"] = {}
@@ -93,31 +90,77 @@ def export_json(name, elist, path):
         edge_data["attributes"]["type"] = get_color(s, t)
         data["edges"].append(edge_data)
 
-    with open(out_path, "w") as out:
-        json.dump(data, out)
-
-    print("Exported %s" % (out_path))
+    return json.dumps(data)
 
 
 edge_list = []
 
 blockModel = BasicBlockModel(currentProgram)
 monitor = ConsoleTaskMonitor()
-func = getFunctionContaining(currentAddress)
-funcName = func.getName()
 
 tmpDir = tempfile.gettempdir()
+binName = os.path.basename(getCurrentProgram().getExecutablePath())
+binHash = getCurrentProgram().getExecutableSHA256()
+binDir = os.path.join(tmpDir, "ghidra_export", binName)
+os.makedirs(binDir)
 
-print("Basic block details for function '{}':".format(funcName))
-blocks = blockModel.getCodeBlocksContaining(func.getBody(), monitor)
+all_json = []
 
-while blocks.hasNext():
-    bb = blocks.next()
-    dest = bb.getDestinations(monitor)
-    while dest.hasNext():
-        dbb = dest.next()
-        if not getFunctionAt(dbb.getDestinationAddress()):
-            edge_list.append((dbb.getSourceBlock(), dbb.getDestinationBlock()))
+func = getFirstFunction()
+while func is not None:
+    if func.isExternal() or func.isThunk():
+        func = getFunctionAfter(func)
+        continue
 
-export_dot(funcName, edge_list, tmpDir)
-export_json(funcName, edge_list, tmpDir)
+    funcName = func.getName()
+
+    print("[*] Parsing %s" % (funcName))
+    # based on code by cetfor: https://github.com/NationalSecurityAgency/ghidra/issues/855#issuecomment-569355675
+    blocks = blockModel.getCodeBlocksContaining(func.getBody(), monitor)
+
+    while blocks.hasNext():
+        bb = blocks.next()
+        dest = bb.getDestinations(monitor)
+        while dest.hasNext():
+            dbb = dest.next()
+            if not getFunctionAt(dbb.getDestinationAddress()):
+                edge_list.append((dbb.getSourceBlock(), dbb.getDestinationBlock()))
+
+    dot_export = export_dot(funcName, edge_list)
+    json_export = export_json(funcName, edge_list)
+
+    # all_json.append(json.loads(json_export)) # TODO Wasteful, need refactoring
+
+    dot_path = os.path.join(binDir, "%s.dot" % funcName)
+    with open(dot_path, "w") as out:
+        out.write(dot_export)
+    print(" \_ Written %s" % (dot_path))
+
+    json_path = os.path.join(binDir, "%s.json" % funcName)
+    with open(json_path, "w") as out:
+        out.write(json_export)
+    print(" \_ Written %s" % (json_path))
+
+    func = getFunctionAfter(func)
+
+meta_json_path = os.path.join(binDir, "_ghidra_export_metadata.json")
+with open(meta_json_path, "w") as out:
+    meta_json = {}
+    meta_json["attributes"] = {}
+    meta_json["attributes"]["binary_name"] = binName
+    meta_json["attributes"]["binary_hash"] = binHash
+    out.write(json.dumps(meta_json))
+print("[*] Metadata JSON written: %s" % (meta_json_path))
+
+"""
+# Not very efficient...
+full_json_path=os.path.join(binDir, "full.json")
+with open(full_json_path, "w") as out:
+    full_json={}
+    full_json["attributes"]={}
+    full_json["attributes"]["binary_name"]=binName
+    full_json["attributes"]["binary_hash"]=binHash
+    full_json["functions_graphology"]=all_json
+    out.write(json.dumps(full_json))
+print("Full JSON written: %s" % (full_json_path))
+"""
