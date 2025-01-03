@@ -66,6 +66,14 @@ def export_dot(name, elist):
     out.append("}")
     return "\n".join(out)
 
+name_counter = 0
+def normalize_func_name(name):
+    global name_counter
+    ret = name.replace('/','-').replace('\\','-').replace('<', '_').replace('>', '_').replace('=','_').replace(',','-')
+    if len(ret) > 128:
+        ret=ret[0:128]+"~"+str(name_counter)
+        name_counter+=1
+    return ret
 
 def export_json(name, elist):
     data = {}
@@ -129,12 +137,12 @@ while func is not None:
 
     all_json.append(json.loads(json_export)) # TODO Wasteful, need refactoring
 
-    dot_path = os.path.join(binDir, "%s.dot" % funcName)
+    dot_path = os.path.join(binDir, "%s.dot" % normalize_func_name(funcName))
     with open(dot_path, "w") as out:
         out.write(dot_export)
     print(" \_ Written %s" % (dot_path))
 
-    json_path = os.path.join(binDir, "%s.json" % funcName)
+    json_path = os.path.join(binDir, "%s.json" % normalize_func_name(funcName))
     with open(json_path, "w") as out:
         out.write(json_export)
     print(" \_ Written %s" % (json_path))
