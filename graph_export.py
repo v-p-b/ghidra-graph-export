@@ -181,7 +181,7 @@ with open(meta_json_path, "w") as out:
         "functions": func_index,
         "extra": {},
     }
-    json.dump(meta_json, out)
+    json.dump({"version": 1, "content": meta_json}, out)
 print("[*] Metadata JSON written: %s" % (meta_json_path))
 
 if BULK_JSON_EXPORT:
