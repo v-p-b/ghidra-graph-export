@@ -16,7 +16,8 @@ def collect_nodes(elist):
     ret = set()
     for f, t in elist:
         ret.add(f)
-        ret.add(t)
+        if t is not None:
+            ret.add(t)
     return ret
 
 
@@ -58,12 +59,13 @@ def export_dot(name, elist):
     out.append("digraph %s {" % (name))
     out.append('  node [shape="box"];')
     out.append("  graph [splines=ortho];")
-    for e in elist:
-        f = e[0].getFirstStartAddress()
-        t = e[1].getFirstStartAddress()
+    for f, t in elist:
+        if t is None: continue
+        f_addr = f.getFirstStartAddress()
+        t_addr = t.getFirstStartAddress()
         out.append(
             '  %s -> %s [color="%s"];'
-            % (address2name(f), address2name(t), get_color_dot(e[0], e[1]))
+            % (address2name(f_addr), address2name(t_addr), get_color_dot(f, t))
         )
     out.append("}")
     return "\n".join(out)
@@ -88,6 +90,7 @@ def export_json(name, elist):
         data["nodes"].append(node_data)
 
     for s, t in elist:
+        if t is None: continue
         edge_data = {}
         edge_data["source"] = address2name(s.getFirstStartAddress())
         edge_data["target"] = address2name(t.getFirstStartAddress())
@@ -144,6 +147,8 @@ while func is not None:
             dbb = dest.next()
             if not getFunctionAt(dbb.getDestinationAddress()):
                 edge_list.append((dbb.getSourceBlock(), dbb.getDestinationBlock()))
+        if (len(edge_list) == 0): # Always add the entry block
+            edge_list.append((bb, None))
 
     dot_export = export_dot(func_name, edge_list)
     json_export = export_json(func_name, edge_list)
