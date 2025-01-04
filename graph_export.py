@@ -9,6 +9,8 @@ import os
 from ghidra.program.model.block import BasicBlockModel
 from ghidra.util.task import ConsoleTaskMonitor
 
+BULK_JSON_EXPORT = False
+
 
 def collect_nodes(elist):
     ret = set()
@@ -66,14 +68,9 @@ def export_dot(name, elist):
     out.append("}")
     return "\n".join(out)
 
+
 name_counter = 0
-def normalize_func_name(name):
-    global name_counter
-    ret = name.replace('/','-').replace('\\','-').replace('<', '_').replace('>', '_').replace('=','_').replace(',','-')
-    if len(ret) > 128:
-        ret=ret[0:128]+"~"+str(name_counter)
-        name_counter+=1
-    return ret
+
 
 def export_json(name, elist):
     data = {}
@@ -98,18 +95,33 @@ def export_json(name, elist):
         edge_data["attributes"]["type"] = get_color(s, t)
         data["edges"].append(edge_data)
 
-    return json.dumps(data)
+    return data
+
 
 blockModel = BasicBlockModel(currentProgram)
 monitor = ConsoleTaskMonitor()
 
-tmpDir = tempfile.gettempdir()
-binName = os.path.basename(getCurrentProgram().getExecutablePath())
-binHash = getCurrentProgram().getExecutableSHA256()
-binDir = os.path.join(tmpDir, "ghidra_export", binName)
-os.makedirs(binDir)
+bin_name = os.path.basename(getCurrentProgram().getExecutablePath())
+bin_hash = getCurrentProgram().getExecutableSHA256()
+
+project_name = bin_name
+if "GHIDRA_EXPORT_PROJECT" in os.environ:
+    project_name = os.environ["GHIDRA_EXPORT_PROJECT"]
+
+bin_version = bin_hash
+if "GHIDRA_EXPORT_VERSION" in os.environ:
+    bin_version = os.environ["GHIDRA_EXPORT_VERSION"]
+
+
+base_dir = os.path.join(tempfile.gettempdir(), "ghidra_export")
+if "GHIDRA_EXPORT_OUTDIR" in os.environ:
+    base_dir = os.environ["GHIDRA_EXPORT_OUTDIR"]
+
+bin_dir = os.path.join(base_dir, bin_name)
+os.makedirs(bin_dir)
 
 all_json = []
+func_index = []
 
 func = getFirstFunction()
 while func is not None:
@@ -117,10 +129,11 @@ while func is not None:
         func = getFunctionAfter(func)
         continue
 
-    funcName = func.getName()
+    func_name = func.getName()
+    entry_str = str(func.getEntryPoint())
     edge_list = []
 
-    print("[*] Parsing %s" % (funcName))
+    print("[*] Parsing %s" % (func_name))
     # based on code by cetfor: https://github.com/NationalSecurityAgency/ghidra/issues/855#issuecomment-569355675
     blocks = blockModel.getCodeBlocksContaining(func.getBody(), monitor)
 
@@ -132,38 +145,52 @@ while func is not None:
             if not getFunctionAt(dbb.getDestinationAddress()):
                 edge_list.append((dbb.getSourceBlock(), dbb.getDestinationBlock()))
 
-    dot_export = export_dot(funcName, edge_list)
-    json_export = export_json(funcName, edge_list)
+    dot_export = export_dot(func_name, edge_list)
+    json_export = export_json(func_name, edge_list)
 
-    all_json.append(json.loads(json_export)) # TODO Wasteful, need refactoring
+    func_index.append(
+        {
+            "address": entry_str,
+            "name": func_name,
+            "node_count": len(json_export["nodes"]),
+        }
+    )
+    if BULK_JSON_EXPORT:
+        all_json.append(json.loads(json_export))  # TODO Wasteful, need refactoring
 
-    dot_path = os.path.join(binDir, "%s.dot" % normalize_func_name(funcName))
+    dot_path = os.path.join(bin_dir, "%s.dot" % (entry_str))
     with open(dot_path, "w") as out:
         out.write(dot_export)
     print(" \_ Written %s" % (dot_path))
 
-    json_path = os.path.join(binDir, "%s.json" % normalize_func_name(funcName))
+    json_path = os.path.join(bin_dir, "%s.json" % (entry_str))
     with open(json_path, "w") as out:
-        out.write(json_export)
+        json.dump(json_export, out)
     print(" \_ Written %s" % (json_path))
 
     func = getFunctionAfter(func)
 
-meta_json_path = os.path.join(binDir, "_ghidra_export_metadata.json")
+meta_json_path = os.path.join(bin_dir, "_ghidra_export_metadata.json")
 with open(meta_json_path, "w") as out:
-    meta_json = {}
-    meta_json["attributes"] = {}
-    meta_json["attributes"]["binary_name"] = binName
-    meta_json["attributes"]["binary_hash"] = binHash
-    out.write(json.dumps(meta_json))
+    meta_json = {
+        "index_type": "ghidra",
+        "project": project_name,
+        "filename": bin_name,
+        "version": bin_version,
+        "sha256": bin_hash,
+        "functions": func_index,
+        "extra": {},
+    }
+    json.dump(meta_json, out)
 print("[*] Metadata JSON written: %s" % (meta_json_path))
 
-full_json_path=os.path.join(binDir, "full.json")
-with open(full_json_path, "w") as out:
-    full_json={}
-    full_json["attributes"]={}
-    full_json["attributes"]["binary_name"]=binName
-    full_json["attributes"]["binary_hash"]=binHash
-    full_json["functions_graphology"]=all_json
-    out.write(json.dumps(full_json))
-print("Full JSON written: %s" % (full_json_path))
+if BULK_JSON_EXPORT:
+    full_json_path = os.path.join(bin_dir, "full.json")
+    with open(full_json_path, "w") as out:
+        full_json = {}
+        full_json["attributes"] = {}
+        full_json["attributes"]["binary_name"] = bin_name
+        full_json["attributes"]["binary_hash"] = bin_hash
+        full_json["functions_graphology"] = all_json
+        out.write(json.dumps(full_json))
+    print("Full JSON written: %s" % (full_json_path))
