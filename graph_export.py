@@ -117,7 +117,7 @@ base_dir = os.path.join(tempfile.gettempdir(), "ghidra_export")
 if "GHIDRA_EXPORT_OUTDIR" in os.environ:
     base_dir = os.environ["GHIDRA_EXPORT_OUTDIR"]
 
-bin_dir = os.path.join(base_dir, bin_name)
+bin_dir = os.path.join(base_dir, project_name)
 os.makedirs(bin_dir)
 
 all_json = []
