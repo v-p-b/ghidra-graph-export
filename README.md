@@ -1,6 +1,6 @@
 # Ghidra Graph Export Script
 
-Generate Graphviz (DOT) and Grapholoy graphs from ghidra functions.
+Generate Graphviz (DOT) and Grapholoy (JSON - to be used with [function-graph-overview](https://github.com/tmr232/function-graph-overview)) graph definitions from Ghidra functions.
 
 Headless execution:
 
