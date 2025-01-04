@@ -175,7 +175,7 @@ while func is not None:
 
     func = getFunctionAfter(func)
 
-meta_json_path = os.path.join(bin_dir, "_ghidra_export_metadata.json")
+meta_json_path = os.path.join(bin_dir, "index.json")
 with open(meta_json_path, "w") as out:
     meta_json = {
         "index_type": "ghidra",
