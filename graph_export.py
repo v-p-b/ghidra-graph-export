@@ -170,7 +170,7 @@ while func is not None:
 
     json_path = os.path.join(bin_dir, "%s.json" % (entry_str))
     with open(json_path, "w") as out:
-        json.dump(json_export, out)
+        json.dump(json_export, out, sort_keys=True, indent=2)
     print(" \_ Written %s" % (json_path))
 
     func = getFunctionAfter(func)
@@ -186,7 +186,7 @@ with open(meta_json_path, "w") as out:
         "functions": func_index,
         "extra": {},
     }
-    json.dump({"version": 1, "content": meta_json}, out)
+    json.dump({"version": 1, "content": meta_json}, out, sort_keys=True, indent=2)
 print("[*] Metadata JSON written: %s" % (meta_json_path))
 
 if BULK_JSON_EXPORT:
@@ -197,5 +197,5 @@ if BULK_JSON_EXPORT:
         full_json["attributes"]["binary_name"] = bin_name
         full_json["attributes"]["binary_hash"] = bin_hash
         full_json["functions_graphology"] = all_json
-        out.write(json.dumps(full_json))
+        out.write(json.dumps(full_json, sort_keys=True, indent=2))
     print("Full JSON written: %s" % (full_json_path))
